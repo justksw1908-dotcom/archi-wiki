@@ -2,8 +2,18 @@
 // quiz_attempts는 시도마다 한 줄씩 쌓이는 로그라, "이 문제를 지금 얼마나 잘 기억하고 있는지"는
 // 가장 최근 시도 행의 ease_factor/interval_days/repetitions로 표현된다. 이번 시도 전의 최신 상태를
 // 가져와서(없으면 초기값) src/lib/sm2.ts의 순수 함수로 다음 상태를 계산하고, 그 값으로 새 행을 넣는다.
+//
+// Phase 10 후속(로드맵 이후 추가 요청): 로그인 없이도 채점까지는 된다 — 다만 quiz_attempts.user_id가
+// NOT NULL(로그인한 계정 것)이라 비로그인 사용자의 시도는 애초에 저장할 대상이 없고, "다음 복습은
+// 언제"라는 개념 자체도 로그인한 계정의 개인 기록이라 비로그인 사용자에게는 의미가 없다. 그래서
+// 로그인 안 했으면 채점 결과만 그 자리에서 알려주고 DB에는 아무것도 안 남긴다(기록/SM-2 갱신 생략).
+//
+// 정답(answer)을 가져올 때 로그인 여부와 무관하게 항상 서비스 롤 클라이언트(RLS 우회)를 쓴다 —
+// 비로그인 사용자가 채점받으려면 어차피 서버가 정답을 읽어야 하는데, quiz_items 테이블 자체에는
+// anon select 권한을 안 줬으므로(누군가 개발자 도구로 quiz_items를 통째로 조회해서 정답을 미리
+// 보는 걸 막기 위해) 이 라우트 안에서만, 딱 그 하나의 문제에 대해서만 서비스 롤로 조회한다.
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { gradeAnswer, type QuizType } from "@/lib/quiz-grading";
 import { computeSm2, SM2_DEFAULT, addDays, toDateOnlyString } from "@/lib/sm2";
 
@@ -17,12 +27,7 @@ export async function POST(request: Request) {
 
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ ok: false, step: "auth", message: "로그인이 필요합니다." }, { status: 401 });
-  }
 
   let body: AttemptBody;
   try {
@@ -38,7 +43,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: item, error: itemError } = await supabase
+  const serviceRole = createServiceRoleClient();
+  const { data: item, error: itemError } = await serviceRole
     .from("quiz_items")
     .select("id, type, answer, answer_variants")
     .eq("id", body.quiz_item_id)
@@ -54,6 +60,17 @@ export async function POST(request: Request) {
     Array.isArray(item.answer_variants) ? item.answer_variants : [],
     body.user_answer
   );
+
+  if (!user) {
+    // 비로그인: 채점 결과만 알려주고 기록은 남기지 않는다.
+    return NextResponse.json({
+      ok: true,
+      is_correct: isCorrect,
+      correct_answer: item.answer,
+      next_review_in_days: null,
+      next_review_at: null,
+    });
+  }
 
   // 이 문제를 이전에 몇 번 풀었었는지 가장 최근 시도에서 SM-2 상태를 가져온다 (한 번도 안 풀었으면 초기값).
   const { data: lastAttempt, error: lastAttemptError } = await supabase

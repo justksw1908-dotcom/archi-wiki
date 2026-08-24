@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usernameToEmail } from "@/lib/auth-username";
+import { COLORS, FONT_FAMILY } from "@/lib/theme";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,9 +37,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 22, marginBottom: 8 }}>학습 위키 로그인</h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>
+    <div style={{ maxWidth: 380, margin: "0 auto", padding: "88px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: -0.3, marginBottom: 8, color: COLORS.text }}>
+        학습 위키 로그인
+      </h1>
+      <p style={{ color: COLORS.textFaint, fontSize: 13.5, marginBottom: 26, lineHeight: 1.6 }}>
         위키 열람은 로그인 없이도 가능해요. 문서를 편집하거나 AI로 새로 생성하려면 로그인이 필요해요.
       </p>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -49,7 +52,13 @@ export default function LoginPage() {
           placeholder="아이디"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          style={{ padding: "10px 12px", border: "1px solid #ccc", borderRadius: 6, fontSize: 14 }}
+          style={{
+            padding: "11px 14px",
+            border: `1.5px solid ${COLORS.border}`,
+            borderRadius: 10,
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
         />
         <input
           type="password"
@@ -58,25 +67,32 @@ export default function LoginPage() {
           placeholder="비밀번호"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          style={{ padding: "10px 12px", border: "1px solid #ccc", borderRadius: 6, fontSize: 14 }}
+          style={{
+            padding: "11px 14px",
+            border: `1.5px solid ${COLORS.border}`,
+            borderRadius: 10,
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
         />
         <button
           type="submit"
           disabled={status === "sending"}
           style={{
-            padding: "10px 12px",
-            borderRadius: 6,
+            padding: "12px 14px",
+            borderRadius: 10,
             border: "none",
-            background: "#2F6F62",
+            background: COLORS.red,
             color: "#fff",
             fontSize: 14,
+            fontWeight: 700,
             cursor: "pointer",
           }}
         >
           {status === "sending" ? "로그인 중..." : "로그인"}
         </button>
         {status === "error" && (
-          <p style={{ color: "#b3261e", fontSize: 13 }}>오류: {errorMsg}</p>
+          <p style={{ color: COLORS.dangerText, fontSize: 13, margin: 0 }}>오류: {errorMsg}</p>
         )}
       </form>
     </div>

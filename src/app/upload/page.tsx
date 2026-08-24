@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { COLORS, FONT_FAMILY } from "@/lib/theme";
 
 type UploadResult = {
   ok: boolean;
@@ -126,10 +127,12 @@ export default function UploadPage() {
   }, []);
 
   return (
-    <div style={{ maxWidth: 520, margin: "60px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 22, marginBottom: 8 }}>학습 자료 업로드</h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>
-        PDF 또는 TXT 파일을 올리면 텍스트를 뽑아서 저장해요. (Phase 3 — 아직 AI 위키 생성은 다음 단계예요.)
+    <div style={{ maxWidth: 540, margin: "0 auto", padding: "60px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: -0.3, marginBottom: 8, color: COLORS.text }}>
+        학습 자료 업로드
+      </h1>
+      <p style={{ color: COLORS.textFaint, fontSize: 13.5, marginBottom: 26, lineHeight: 1.6 }}>
+        PDF 또는 TXT 파일을 올리면 AI가 텍스트를 읽고 위키 문서로 정리해요.
       </p>
 
       <div
@@ -141,13 +144,14 @@ export default function UploadPage() {
         }}
         onClick={() => inputRef.current?.click()}
         style={{
-          border: "2px dashed #ccc",
-          borderRadius: 10,
-          padding: "40px 20px",
+          border: `2px dashed ${COLORS.border}`,
+          borderRadius: 16,
+          padding: "44px 20px",
           textAlign: "center",
           cursor: "pointer",
-          color: "#888",
+          color: COLORS.textFaint,
           fontSize: 14,
+          background: COLORS.bgSubtle,
         }}
       >
         {status === "uploading" ? "업로드 중..." : "클릭하거나 파일을 여기로 끌어다 놓으세요 (PDF/TXT)"}
@@ -168,12 +172,13 @@ export default function UploadPage() {
         <div
           style={{
             marginTop: 20,
-            padding: "14px 16px",
-            borderRadius: 8,
+            padding: "16px 18px",
+            borderRadius: 14,
             fontSize: 13.5,
-            background: result.ok ? "#E1EEE9" : "#F8E5E1",
-            border: `1px solid ${result.ok ? "#BEDACF" : "#E8B9AC"}`,
+            background: result.ok ? COLORS.successBg : COLORS.dangerBg,
+            border: `1px solid ${result.ok ? COLORS.successBorder : COLORS.dangerBorder}`,
             whiteSpace: "pre-wrap",
+            color: COLORS.text,
           }}
         >
           {result.ok ? (
@@ -182,7 +187,7 @@ export default function UploadPage() {
               <br />
               페이지 {result.page_count}쪽 · 청크 {result.chunk_count}개
               <br />
-              <span style={{ color: "#666" }}>미리보기: {result.preview}...</span>
+              <span style={{ color: COLORS.textFaint }}>미리보기: {result.preview}...</span>
             </>
           ) : (
             <>
@@ -197,7 +202,16 @@ export default function UploadPage() {
           {gen.status === "idle" && (
             <button
               onClick={() => startGenerate(result.source_file_id!)}
-              style={{ padding: "8px 16px", fontSize: 13.5, borderRadius: 6, border: "1px solid #999", background: "#fff", cursor: "pointer" }}
+              style={{
+                padding: "9px 18px",
+                fontSize: 13.5,
+                fontWeight: 700,
+                borderRadius: 10,
+                border: "none",
+                background: COLORS.red,
+                color: "#fff",
+                cursor: "pointer",
+              }}
             >
               AI로 위키 문서 생성 시작
             </button>
@@ -206,11 +220,12 @@ export default function UploadPage() {
           {gen.status !== "idle" && (
             <div
               style={{
-                padding: "12px 16px",
-                borderRadius: 8,
+                padding: "14px 18px",
+                borderRadius: 14,
                 fontSize: 13.5,
-                background: gen.status === "error" ? "#F8E5E1" : gen.status === "quota" ? "#FBF0DC" : "#F0F2F6",
-                border: `1px solid ${gen.status === "error" ? "#E8B9AC" : gen.status === "quota" ? "#E8CE9A" : "#D3D9E3"}`,
+                background: gen.status === "error" ? COLORS.dangerBg : gen.status === "quota" ? COLORS.warningBg : COLORS.bgSubtle,
+                border: `1px solid ${gen.status === "error" ? COLORS.dangerBorder : gen.status === "quota" ? COLORS.warningBorder : COLORS.border}`,
+                color: COLORS.text,
               }}
             >
               {gen.status === "running" && "생성 중... "}
@@ -221,7 +236,7 @@ export default function UploadPage() {
               {gen.pendingChanges > 0 && (
                 <>
                   {" "}
-                  <a href="/pending" className="underline">
+                  <a href="/pending" style={{ color: COLORS.red, fontWeight: 700, textDecoration: "underline" }}>
                     /pending
                   </a>
                   에서 확인하세요.
@@ -230,14 +245,22 @@ export default function UploadPage() {
               {gen.message && (
                 <>
                   <br />
-                  <span style={{ color: "#888" }}>{gen.message}</span>
+                  <span style={{ color: COLORS.textFaint }}>{gen.message}</span>
                 </>
               )}
               {(gen.status === "quota" || gen.status === "error") && (
                 <div style={{ marginTop: 10 }}>
                   <button
                     onClick={() => startGenerate(result!.source_file_id!)}
-                    style={{ padding: "6px 14px", fontSize: 13, borderRadius: 6, border: "1px solid #999", background: "#fff", cursor: "pointer" }}
+                    style={{
+                      padding: "7px 16px",
+                      fontSize: 13,
+                      borderRadius: 8,
+                      border: `1px solid ${COLORS.borderStrong}`,
+                      background: "#fff",
+                      color: COLORS.textMuted,
+                      cursor: "pointer",
+                    }}
                   >
                     이어서 다시 시도
                   </button>

@@ -3,6 +3,7 @@
 // Phase 4: AI가 "기존 문서와 겹치지만 추가/수정할 내용이 있다"고 판단한 제안들을
 // 사람이 직접 승인/거절하는 화면. 여기서 승인해야만 실제 wiki_pages가 바뀐다.
 import { useCallback, useEffect, useState } from "react";
+import { COLORS, FONT_FAMILY } from "@/lib/theme";
 
 type PendingItem = {
   id: string;
@@ -68,37 +69,71 @@ export default function PendingPage() {
   );
 
   return (
-    <div style={{ maxWidth: 640, margin: "60px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-      <h1 style={{ fontSize: 22, marginBottom: 8 }}>승인 대기열</h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 24 }}>
+    <div style={{ maxWidth: 680, margin: "0 auto", padding: "60px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: -0.3, marginBottom: 8, color: COLORS.text }}>
+        승인 대기열
+      </h1>
+      <p style={{ color: COLORS.textFaint, fontSize: 13.5, marginBottom: 26, lineHeight: 1.6 }}>
         AI가 기존 위키 문서와 겹치는 내용을 발견했을 때만 여기에 나타나요. 승인해야 실제 문서가 바뀌어요.
         (완전히 새로운 개념은 대기 없이 바로 문서로 만들어져요.)
       </p>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: "10px 14px", background: "#F8E5E1", border: "1px solid #E8B9AC", borderRadius: 8, fontSize: 13.5 }}>
+        <div
+          style={{
+            marginBottom: 16,
+            padding: "10px 14px",
+            background: COLORS.dangerBg,
+            border: `1px solid ${COLORS.dangerBorder}`,
+            borderRadius: 10,
+            fontSize: 13.5,
+            color: COLORS.dangerText,
+          }}
+        >
           오류: {error}
         </div>
       )}
 
-      {items === null && <p style={{ color: "#888", fontSize: 14 }}>불러오는 중...</p>}
-      {items !== null && items.length === 0 && <p style={{ color: "#888", fontSize: 14 }}>대기 중인 항목이 없어요.</p>}
+      {items === null && <p style={{ color: COLORS.textFaint, fontSize: 14 }}>불러오는 중...</p>}
+      {items !== null && items.length === 0 && <p style={{ color: COLORS.textFaint, fontSize: 14 }}>대기 중인 항목이 없어요.</p>}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {items?.map((item) => (
-          <div key={item.id} style={{ border: "1px solid #ddd", borderRadius: 10, padding: "16px 18px" }}>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 6 }}>
-              {item.change_type === "extend" ? "기존 문서에 내용 추가 제안" : "기존 문서 수정 제안"}
-              {" · 대상: "}
-              <strong>{item.wiki_pages?.title ?? "(알 수 없음)"}</strong>
+          <div key={item.id} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: "18px 20px" }}>
+            <div style={{ fontSize: 12, color: COLORS.textFaint, marginBottom: 8 }}>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: COLORS.red,
+                  background: COLORS.redBg,
+                  border: `1px solid ${COLORS.redBorder}`,
+                  padding: "2px 8px",
+                  borderRadius: 999,
+                  marginRight: 6,
+                }}
+              >
+                {item.change_type === "extend" ? "내용 추가 제안" : "수정 제안"}
+              </span>
+              대상: <strong style={{ color: COLORS.text }}>{item.wiki_pages?.title ?? "(알 수 없음)"}</strong>
             </div>
 
-            {item.reason && <p style={{ fontSize: 13, color: "#666", marginBottom: 10 }}>이유: {item.reason}</p>}
+            {item.reason && <p style={{ fontSize: 13, color: COLORS.textFaint, marginBottom: 10 }}>이유: {item.reason}</p>}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>현재 내용</div>
-                <div style={{ fontSize: 13, background: "#fafafa", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textFainter, marginBottom: 4 }}>현재 내용</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    background: COLORS.bgSubtle,
+                    border: `1px solid ${COLORS.border}`,
+                    padding: 10,
+                    borderRadius: 10,
+                    whiteSpace: "pre-wrap",
+                    color: COLORS.text,
+                  }}
+                >
                   {item.wiki_pages?.definition ?? "-"}
                   {item.wiki_pages?.points?.length ? (
                     <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -110,8 +145,18 @@ export default function PendingPage() {
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "#999", marginBottom: 4 }}>제안된 내용</div>
-                <div style={{ fontSize: 13, background: "#F4F8F5", padding: 10, borderRadius: 6, whiteSpace: "pre-wrap" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.red, marginBottom: 4 }}>제안된 내용</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    background: COLORS.redBg,
+                    border: `1px solid ${COLORS.redBorder}`,
+                    padding: 10,
+                    borderRadius: 10,
+                    whiteSpace: "pre-wrap",
+                    color: COLORS.text,
+                  }}
+                >
                   {item.proposed_definition}
                   {item.proposed_points?.length ? (
                     <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
@@ -128,14 +173,31 @@ export default function PendingPage() {
               <button
                 onClick={() => resolve(item.id, "approve")}
                 disabled={busyId === item.id}
-                style={{ padding: "6px 14px", fontSize: 13, borderRadius: 6, border: "1px solid #4C8A6A", background: "#E1EEE9", cursor: "pointer" }}
+                style={{
+                  padding: "7px 16px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: "none",
+                  background: COLORS.red,
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
               >
                 승인
               </button>
               <button
                 onClick={() => resolve(item.id, "reject")}
                 disabled={busyId === item.id}
-                style={{ padding: "6px 14px", fontSize: 13, borderRadius: 6, border: "1px solid #B45B45", background: "#F8E5E1", cursor: "pointer" }}
+                style={{
+                  padding: "7px 16px",
+                  fontSize: 13,
+                  borderRadius: 8,
+                  border: `1px solid ${COLORS.borderStrong}`,
+                  background: "#fff",
+                  color: COLORS.textMuted,
+                  cursor: "pointer",
+                }}
               >
                 거절
               </button>

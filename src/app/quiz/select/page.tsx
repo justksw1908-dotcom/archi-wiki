@@ -3,8 +3,12 @@
 // Phase 6 (수정): 퀴즈를 만들 범위를 장/절/개별 문서 단위로 직접 골라서 생성한다.
 // "한 번에 다 만들면 Gemini 할당량을 거의 다 써버릴 것 같다"는 요청으로, 예전의
 // "AI로 퀴즈 생성 시작"(전체 일괄) 버튼을 이 화면으로 대체했다.
+//
+// 디자인 라운드: 파란색/보라색 강조를 브랜드 컬러(red/orange)로 통일했다. 트리 구조 자체는
+// 기능 그대로 두고 카드·배지 스타일만 다시 그렸다.
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { COLORS, FONT_FAMILY } from "@/lib/theme";
 
 type Item = { id: string; title: string; section: string; has_quiz: boolean };
 type ParsedItem = Item & { chapter: string; sectionNum: string; label: string };
@@ -200,16 +204,16 @@ export default function QuizSelectPage() {
 
   if (error) {
     return (
-      <div style={{ maxWidth: 720, margin: "48px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-        <p style={{ color: "#B45B45" }}>오류: {error}</p>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+        <p style={{ color: COLORS.dangerText }}>오류: {error}</p>
       </div>
     );
   }
 
   if (!items) {
     return (
-      <div style={{ maxWidth: 720, margin: "48px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-        <p style={{ color: "#888" }}>불러오는 중...</p>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+        <p style={{ color: COLORS.textFaint }}>불러오는 중...</p>
       </div>
     );
   }
@@ -217,35 +221,38 @@ export default function QuizSelectPage() {
   const allState = stateFor(allSelectableIds);
 
   return (
-    <div style={{ maxWidth: 720, margin: "48px auto", padding: "0 20px", fontFamily: "sans-serif" }}>
-      <Link href="/quiz" style={{ fontSize: 13, color: "#888", textDecoration: "none" }}>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "48px 20px 60px", fontFamily: FONT_FAMILY, background: COLORS.bg }}>
+      <Link href="/quiz" style={{ fontSize: 13, color: COLORS.textFainter, textDecoration: "none" }}>
         ← 퀴즈 허브
       </Link>
-      <h1 style={{ fontSize: 22, margin: "12px 0 4px" }}>퀴즈 생성 범위 선택</h1>
-      <p style={{ color: "#666", fontSize: 13.5, marginBottom: 16 }}>
-        장 · 절 · 개별 문서 단위로 골라서 그 범위만 AI로 퀴즈를 만들어요. 이미 퀴즈가 있는 문서는 목록에서 &ldquo;생성됨&rdquo;으로 표시되고 다시 안 만들어요.
+      <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: -0.3, margin: "14px 0 4px", color: COLORS.text }}>
+        퀴즈 생성 범위 선택
+      </h1>
+      <p style={{ color: COLORS.textFaint, fontSize: 13.5, marginBottom: 18, lineHeight: 1.6 }}>
+        장 · 절 · 개별 문서 단위로 골라서 그 범위만 AI로 퀴즈를 만들어요. 이미 퀴즈가 있는 문서는 목록에서
+        &ldquo;생성됨&rdquo;으로 표시되고 다시 안 만들어요.
       </p>
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 14, fontWeight: 600 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 14, fontWeight: 700, color: COLORS.text }}>
         <TriCheckbox checked={allState.checked} indeterminate={allState.indeterminate} onChange={() => toggleIds(allSelectableIds)} />
         전체 선택 (아직 퀴즈 없는 문서 {allSelectableIds.length}개)
       </label>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
         {chapters.map((ch) => {
           const chIds = selectableIds(ch.docs);
           const chState = stateFor(chIds);
           const chExpanded = expandedChapters.has(ch.chapter);
           return (
-            <div key={ch.chapter} style={{ border: "1px solid #e5e5e5", borderRadius: 8, padding: "8px 12px" }}>
+            <div key={ch.chapter} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: "10px 14px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <TriCheckbox checked={chState.checked} indeterminate={chState.indeterminate} onChange={() => toggleIds(chIds)} disabled={chIds.length === 0} />
                 <button
                   onClick={() => toggleExpand(expandedChapters, setExpandedChapters, ch.chapter)}
-                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: 0, flex: 1, textAlign: "left" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: 0, flex: 1, textAlign: "left", color: COLORS.text }}
                 >
                   {chExpanded ? "▾" : "▸"} {ch.chapter}장{" "}
-                  <span style={{ color: "#999", fontSize: 12.5 }}>
+                  <span style={{ color: COLORS.textFainter, fontSize: 12.5 }}>
                     (남음 {chIds.length} / 전체 {ch.docs.length})
                   </span>
                 </button>
@@ -264,17 +271,17 @@ export default function QuizSelectPage() {
                           <TriCheckbox checked={secState.checked} indeterminate={secState.indeterminate} onChange={() => toggleIds(secIds)} disabled={secIds.length === 0} />
                           <button
                             onClick={() => toggleExpand(expandedSections, setExpandedSections, secKey)}
-                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13.5, padding: 0, flex: 1, textAlign: "left" }}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13.5, padding: 0, flex: 1, textAlign: "left", color: COLORS.text }}
                           >
                             {secExpanded ? "▾" : "▸"} {sec.sectionNum}절{" "}
-                            <span style={{ color: "#999", fontSize: 12 }}>
+                            <span style={{ color: COLORS.textFainter, fontSize: 12 }}>
                               (남음 {secIds.length} / 전체 {sec.docs.length})
                             </span>
                           </button>
                         </div>
 
                         {secExpanded && (
-                          <div style={{ marginTop: 4, marginLeft: 24, display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ marginTop: 4, marginLeft: 24, display: "flex", flexDirection: "column", gap: 4 }}>
                             {sec.docs.map((doc) => (
                               <label key={doc.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                                 <input
@@ -283,8 +290,10 @@ export default function QuizSelectPage() {
                                   disabled={doc.has_quiz}
                                   onChange={() => toggleIds([doc.id])}
                                 />
-                                <span style={{ color: doc.has_quiz ? "#bbb" : "#333" }}>{doc.title}</span>
-                                {doc.has_quiz && <span style={{ fontSize: 11, color: "#4C8A6A" }}>생성됨</span>}
+                                <span style={{ color: doc.has_quiz ? COLORS.textFainter : COLORS.text }}>{doc.title}</span>
+                                {doc.has_quiz && (
+                                  <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.successText }}>생성됨</span>
+                                )}
                               </label>
                             ))}
                           </div>
@@ -299,16 +308,18 @@ export default function QuizSelectPage() {
         })}
       </div>
 
-      <div style={{ position: "sticky", bottom: 0, background: "#fff", paddingTop: 12, borderTop: "1px solid #eee" }}>
+      <div style={{ position: "sticky", bottom: 0, background: COLORS.bg, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
         <button
           onClick={start}
           disabled={selectedIds.size === 0 || progress.status === "running"}
           style={{
-            padding: "10px 18px",
+            padding: "11px 20px",
             fontSize: 14,
-            borderRadius: 6,
-            border: "1px solid #4C8A6A",
-            background: selectedIds.size === 0 ? "#f0f0f0" : "#E1EEE9",
+            fontWeight: 700,
+            borderRadius: 10,
+            border: "none",
+            background: selectedIds.size === 0 ? COLORS.chipBg : COLORS.red,
+            color: selectedIds.size === 0 ? COLORS.textFainter : "#fff",
             cursor: selectedIds.size === 0 ? "default" : "pointer",
             marginBottom: 10,
           }}
@@ -319,11 +330,12 @@ export default function QuizSelectPage() {
         {progress.status !== "idle" && (
           <div
             style={{
-              padding: "10px 14px",
-              borderRadius: 8,
+              padding: "12px 16px",
+              borderRadius: 10,
               fontSize: 13.5,
-              background: progress.status === "error" ? "#F8E5E1" : progress.status === "quota" ? "#FBF0DC" : "#F0F2F6",
-              border: `1px solid ${progress.status === "error" ? "#E8B9AC" : progress.status === "quota" ? "#E8CE9A" : "#D3D9E3"}`,
+              background: progress.status === "error" ? COLORS.dangerBg : progress.status === "quota" ? COLORS.warningBg : COLORS.bgSubtle,
+              border: `1px solid ${progress.status === "error" ? COLORS.dangerBorder : progress.status === "quota" ? COLORS.warningBorder : COLORS.border}`,
+              color: COLORS.text,
             }}
           >
             {progress.status === "running" && "생성 중... "}
@@ -334,7 +346,7 @@ export default function QuizSelectPage() {
             {progress.message && (
               <>
                 <br />
-                <span style={{ color: "#888" }}>{progress.message}</span>
+                <span style={{ color: COLORS.textFaint }}>{progress.message}</span>
               </>
             )}
           </div>
