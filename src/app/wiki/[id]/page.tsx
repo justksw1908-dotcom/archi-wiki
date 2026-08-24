@@ -16,13 +16,18 @@
 //
 // AI 에이전트 라운드: 이 문서 페이지의 위젯은 "문서 인식형"이다 — 지금 보고 있는 문서의
 // title·section·definition·points를 context로 넘겨서, 에이전트가 이 문서 내용을 참고해 답하게 한다.
+//
+// 알약 통일 라운드: "이 문서를 참조하는 문서(역링크)"도 관련 문서처럼 알약(칩) 모양으로 보이면 좋겠다는
+// 요청으로, 전체 폭 카드(WikiResultCard)를 늘어놓던 방식 대신 관련 문서와 같은 컴포넌트(RelatedDocsPanel)를
+// 그대로 재사용한다 — RelatedDoc과 WikiResultDoc은 필드 구성이 완전히 같아서(id/title/section/definition/
+// points/flagged) 타입 변환 없이 그대로 넘길 수 있다. 클릭하면 바로 자세히 보기로 이동하지 않고 그 자리에
+// 정의·포인트가 펼쳐지는 것도 관련 문서와 동일하게 그대로 유지된다(RelatedDocsPanel이 원래 그렇게 동작함).
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
 import EditPageForm from "./EditPageForm";
 import RelatedDocsPanel, { type RelatedDoc } from "./RelatedDocsPanel";
-import WikiResultCard, { type WikiResultDoc } from "../WikiResultCard";
 import AgentChatWidget from "../../AgentChatWidget";
 
 type LinkedDoc = { id: string; title: string; section: string; definition: string; points: string[]; flagged: boolean };
@@ -63,7 +68,7 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
     ...d,
     points: Array.isArray(d.points) ? (d.points as string[]) : [],
   }));
-  const backlinkDocs: WikiResultDoc[] = (backlinkDocsRaw ?? []).map((d) => ({
+  const backlinkDocs: RelatedDoc[] = (backlinkDocsRaw ?? []).map((d) => ({
     ...d,
     points: Array.isArray(d.points) ? (d.points as string[]) : [],
   }));
@@ -173,15 +178,7 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
           <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textFaint, letterSpacing: 0.2, margin: "0 0 12px" }}>
             이 문서를 참조하는 문서 ({backlinkDocs.length})
           </h2>
-          {backlinkDocs.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {backlinkDocs.map((d) => (
-                <WikiResultCard key={d.id} doc={d} />
-              ))}
-            </div>
-          ) : (
-            <span style={{ fontSize: 13, color: COLORS.textFainter }}>없음</span>
-          )}
+          <RelatedDocsPanel docs={backlinkDocs} />
         </div>
 
         {chapterNum && (

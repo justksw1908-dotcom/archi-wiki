@@ -1,5 +1,13 @@
 // Phase 5: 위키 문서 수동 편집 저장. AI 자동 생성/승인 대기열과는 별개로,
 // 사람이 직접 문서를 고치는 경로라서 승인 절차 없이 바로 반영된다.
+//
+// 위키 미리보기 확장 라운드(2차): "/wiki 목록에서 카드를 펼쳤을 때도 관련 문서·역링크 알약이
+// 같이 나왔으면 좋겠다"는 요청으로 GET을 추가했다. /wiki/[id] 상세 페이지가 서버 컴포넌트에서
+// 하던 것과 같은 조회(나가는 링크·들어오는 링크 각각 조회 후 wiki_pages 배치 조회)를 여기서도
+// 그대로 하되, 클라이언트(WikiResultCard)가 카드를 펼칠 때만 필요해서 그때 한 번만 호출한다 —
+// 목록의 문서 300개 전부를 미리 조회하면 낭비라서 이렇게 지연 로딩으로 뺐다. 위키 열람 자체가
+// 로그인 없이도 되는 공개 데이터라 이 GET도 로그인을 요구하지 않는다(wiki_pages/wiki_links의
+// public select RLS 정책 그대로 적용됨 — supabase/migrations/005_phase10_public_wiki_read.sql).
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,6 +19,37 @@ type EditBody = {
   links?: string[];
   flagged?: boolean;
 };
+
+type LinkedDoc = { id: string; title: string; section: string; definition: string; points: string[]; flagged: boolean };
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: outgoingLinkRows } = await supabase.from("wiki_links").select("to_page_id").eq("from_page_id", id);
+  const { data: backlinkRows } = await supabase.from("wiki_links").select("from_page_id").eq("to_page_id", id);
+
+  const outgoingIds = (outgoingLinkRows ?? []).map((r) => r.to_page_id);
+  const backlinkIds = (backlinkRows ?? []).map((r) => r.from_page_id);
+
+  const [{ data: outgoingDocsRaw }, { data: backlinkDocsRaw }] = await Promise.all([
+    outgoingIds.length
+      ? supabase.from("wiki_pages").select("id, title, section, definition, points, flagged").in("id", outgoingIds)
+      : Promise.resolve({ data: [] as LinkedDoc[] }),
+    backlinkIds.length
+      ? supabase.from("wiki_pages").select("id, title, section, definition, points, flagged").in("id", backlinkIds)
+      : Promise.resolve({ data: [] as LinkedDoc[] }),
+  ]);
+
+  const normalize = (rows: LinkedDoc[] | null) =>
+    (rows ?? []).map((d) => ({ ...d, points: Array.isArray(d.points) ? d.points : [] }));
+
+  return NextResponse.json({
+    ok: true,
+    outgoing: normalize(outgoingDocsRaw),
+    backlinks: normalize(backlinkDocsRaw),
+  });
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
