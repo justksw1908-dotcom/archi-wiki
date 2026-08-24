@@ -21,12 +21,14 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const chapter = searchParams.get("chapter");
+  const section = chapter ? searchParams.get("section") : null;
   const countParam = Number(searchParams.get("count"));
   const count = Number.isFinite(countParam) && countParam > 0 ? Math.min(countParam, MAX_COUNT) : DEFAULT_COUNT;
 
   const { data, error } = await supabase.rpc("get_due_review_items", {
     p_count: count,
     p_chapter: chapter || null,
+    p_section: section || null,
   });
 
   if (error) {

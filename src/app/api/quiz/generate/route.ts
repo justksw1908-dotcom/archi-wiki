@@ -4,10 +4,18 @@
 // 한 번 호출에 몇 문서씩만 처리(서버리스 실행 시간 제한) — 클라이언트가 자기 목록을 다 처리할 때까지
 // 나눠서 반복 호출한다.
 // Phase 8: generateQuizItemsAuto를 쓰면서, Gemini 할당량 초과 시 로컬 Ollama가 있으면 자동으로
-// 대신 생성한다 — quota_exceeded는 이제 "Gemini 할당량 초과 + 로컬 Ollama도 못 씀"일 때만 켜진다.
+// 대신 생성한다 — quota_exceeded는 이제 "Gemini 할당량 초과 + Groq/로컬 Ollama도 못 씀"일 때만 켜진다.
+// AI 에이전트 라운드: Groq 폴백이 추가되면서 source가 "groq"도 될 수 있어, 어느 경로로 만들어졌는지
+// created_via_groq/created_via_ollama로 각각 집계해서 응답에 같이 내려준다.
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateQuizItemsAuto, QuizGenerationError, QuizQuotaExceededError, type GeminiQuizItem } from "@/lib/quiz-gemini";
+import {
+  generateQuizItemsAuto,
+  QuizGenerationError,
+  QuizQuotaExceededError,
+  type GeminiQuizItem,
+  type GenerationSource,
+} from "@/lib/quiz-gemini";
 
 const MAX_PAGES_PER_CALL = 3;
 
@@ -61,6 +69,7 @@ export async function POST(request: Request) {
 
   const errors: string[] = [];
   let createdCount = 0;
+  let createdViaGroq = 0;
   let createdViaOllama = 0;
   let quotaExceeded = false;
   const skippedByQuota: string[] = [];
@@ -74,7 +83,7 @@ export async function POST(request: Request) {
     }
 
     let items: GeminiQuizItem[];
-    let source: "gemini" | "ollama";
+    let source: GenerationSource;
     try {
       const result = await generateQuizItemsAuto(
         page.title,
@@ -134,6 +143,7 @@ export async function POST(request: Request) {
     }
     const insertedCount = count ?? rows.length;
     createdCount += insertedCount;
+    if (source === "groq") createdViaGroq += insertedCount;
     if (source === "ollama") createdViaOllama += insertedCount;
   }
 
@@ -141,6 +151,7 @@ export async function POST(request: Request) {
     ok: true,
     processed_ids: targetIds,
     created: createdCount,
+    created_via_groq: createdViaGroq,
     created_via_ollama: createdViaOllama,
     errors,
     quota_exceeded: quotaExceeded,

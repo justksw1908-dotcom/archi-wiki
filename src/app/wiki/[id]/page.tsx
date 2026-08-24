@@ -9,13 +9,23 @@
 // 디자인 라운드: 시안(WikiDetail.dc.html)의 브레드크럼 · 제목+분류 배지 · 정의 · 포인트 · 관련 문서
 // 칩 · 역링크 카드 구성을 옮겼다. 시안의 우측 보조 패널(이 장의 다른 문서 등)은 없는 데이터를
 // 새로 조회해야 해서 이번 라운드에서는 빼고, 실제 데이터에 있는 항목만 다시 그렸다.
+//
+// 위키 확장 미리보기 라운드: 관련 문서·역링크를 눌러도 바로 이동하지 않고 먼저 내용을 펼쳐 보여주도록
+// 바꿨다(RelatedDocsPanel, WikiResultCard) — 그래서 이 두 목록도 definition·points·flagged까지
+// 같이 가져온다(문서 하나가 보통 링크를 몇 개~몇십 개만 가지고 있어서 비용이 크지 않다).
+//
+// AI 에이전트 라운드: 이 문서 페이지의 위젯은 "문서 인식형"이다 — 지금 보고 있는 문서의
+// title·section·definition·points를 context로 넘겨서, 에이전트가 이 문서 내용을 참고해 답하게 한다.
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
 import EditPageForm from "./EditPageForm";
+import RelatedDocsPanel, { type RelatedDoc } from "./RelatedDocsPanel";
+import WikiResultCard, { type WikiResultDoc } from "../WikiResultCard";
+import AgentChatWidget from "../../AgentChatWidget";
 
-type LinkedDoc = { id: string; title: string; section: string };
+type LinkedDoc = { id: string; title: string; section: string; definition: string; points: string[]; flagged: boolean };
 
 export default async function WikiDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,14 +49,24 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
   const outgoingIds = (outgoingLinkRows ?? []).map((r) => r.to_page_id);
   const backlinkIds = (backlinkRows ?? []).map((r) => r.from_page_id);
 
-  const [{ data: outgoingDocs }, { data: backlinkDocs }] = await Promise.all([
+  const [{ data: outgoingDocsRaw }, { data: backlinkDocsRaw }] = await Promise.all([
     outgoingIds.length
-      ? supabase.from("wiki_pages").select("id, title, section").in("id", outgoingIds)
+      ? supabase.from("wiki_pages").select("id, title, section, definition, points, flagged").in("id", outgoingIds)
       : Promise.resolve({ data: [] as LinkedDoc[] }),
     backlinkIds.length
-      ? supabase.from("wiki_pages").select("id, title, section").in("id", backlinkIds)
+      ? supabase.from("wiki_pages").select("id, title, section, definition, points, flagged").in("id", backlinkIds)
       : Promise.resolve({ data: [] as LinkedDoc[] }),
   ]);
+
+  // points가 jsonb라 배열이 아닐 수도 있는 타입으로 내려오므로, 두 목록 다 안전하게 배열로 정규화한다.
+  const outgoingDocs: RelatedDoc[] = (outgoingDocsRaw ?? []).map((d) => ({
+    ...d,
+    points: Array.isArray(d.points) ? (d.points as string[]) : [],
+  }));
+  const backlinkDocs: WikiResultDoc[] = (backlinkDocsRaw ?? []).map((d) => ({
+    ...d,
+    points: Array.isArray(d.points) ? (d.points as string[]) : [],
+  }));
 
   const points: string[] = Array.isArray(doc.points) ? doc.points : [];
   const chapterMatch = doc.section?.match(/^(\d+)장/);
@@ -144,54 +164,19 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
 
         <div>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textFaint, letterSpacing: 0.2, margin: "0 0 12px" }}>
-            관련 문서 ({outgoingDocs?.length ?? 0})
+            관련 문서 ({outgoingDocs.length})
           </h2>
-          {outgoingDocs && outgoingDocs.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {outgoingDocs.map((d) => (
-                <Link
-                  key={d.id}
-                  href={`/wiki/${d.id}`}
-                  style={{
-                    padding: "7px 14px",
-                    borderRadius: 999,
-                    border: `1px solid ${COLORS.border}`,
-                    fontSize: 13,
-                    color: COLORS.textMuted,
-                    textDecoration: "none",
-                  }}
-                >
-                  {d.title}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <span style={{ fontSize: 13, color: COLORS.textFainter }}>없음</span>
-          )}
+          <RelatedDocsPanel docs={outgoingDocs} />
         </div>
 
         <div>
           <h2 style={{ fontSize: 13, fontWeight: 700, color: COLORS.textFaint, letterSpacing: 0.2, margin: "0 0 12px" }}>
-            이 문서를 참조하는 문서 ({backlinkDocs?.length ?? 0})
+            이 문서를 참조하는 문서 ({backlinkDocs.length})
           </h2>
-          {backlinkDocs && backlinkDocs.length > 0 ? (
+          {backlinkDocs.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {backlinkDocs.map((d) => (
-                <Link
-                  key={d.id}
-                  href={`/wiki/${d.id}`}
-                  style={{
-                    display: "block",
-                    padding: "12px 16px",
-                    borderRadius: 10,
-                    border: `1px solid ${COLORS.border}`,
-                    fontSize: 13.5,
-                    color: COLORS.text,
-                    textDecoration: "none",
-                  }}
-                >
-                  {d.title}
-                </Link>
+                <WikiResultCard key={d.id} doc={d} />
               ))}
             </div>
           ) : (
@@ -218,6 +203,11 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
           </Link>
         )}
       </div>
+
+      <AgentChatWidget
+        loggedIn={Boolean(user)}
+        context={{ title: doc.title, section: doc.section, definition: doc.definition, points }}
+      />
     </div>
   );
 }

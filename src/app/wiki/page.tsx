@@ -4,20 +4,21 @@
 // 디자인 라운드: 시안(Main.dc.html)의 좌측 장별 목차 + 검색 히어로 + 우측 문서 카드 레이아웃을
 // 그대로 옮겼다. 필터가 없으면 아무것도 안 보여주는 기존 동작은 그대로 두고, 그 안내 문구만
 // 카드 형태로 다시 그렸다.
+//
+// 위키 확장 미리보기 라운드: 결과 카드를 클릭하면 바로 문서로 이동하던 걸, 클릭하면 카드가 펼쳐져서
+// 정의·포인트를 먼저 보여주고 "자세히 보기"를 눌러야 이동하는 방식(WikiResultCard)으로 바꿨다.
+// 그래서 목록 조회에 points도 같이 select한다(펼칠 때 추가 조회 없이 바로 보여주기 위해).
+//
+// AI 에이전트 라운드: 이 목록 페이지에도 위젯을 띄운다(특정 문서 context 없이 일반 대화 모드).
+// 로그인 여부에 따라 위젯 내용이 달라져서 user를 새로 조회한다(기존에는 이 페이지가 로그인 여부를
+// 신경 쓰지 않았다 — 열람 자체는 비로그인도 가능하므로 이 조회를 추가해도 접근 제한은 그대로다).
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase-paginate";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
-
-const CHAPTERS = [
-  { num: "0", label: "총론" },
-  { num: "1", label: "시공계획" },
-  { num: "2", label: "철근콘크리트공사" },
-  { num: "3", label: "가설공사" },
-  { num: "4", label: "철골공사" },
-  { num: "5", label: "마감공사" },
-  { num: "6", label: "공정·품질·안전" },
-];
+import { CHAPTER_LABELS as CHAPTERS } from "@/lib/chapters";
+import WikiResultCard, { type WikiResultDoc } from "./WikiResultCard";
+import AgentChatWidget from "../AgentChatWidget";
 
 export default async function WikiListPage({
   searchParams,
@@ -26,6 +27,10 @@ export default async function WikiListPage({
 }) {
   const { q, chapter } = await searchParams;
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   // PostgREST 기본 최대 1000행 한도(문서 1104개라 초과)를 넘겨 전체를 다 가져와야
   // 장별 개수·전체 개수가 정확하다 — .range() 없이 select만 하면 6장이 잘려서 안 보이던 버그가 있었다.
@@ -38,11 +43,14 @@ export default async function WikiListPage({
   }
   const totalCount = chapterCounts?.length ?? 0;
 
-  let results: { id: string; title: string; section: string; definition: string; flagged: boolean }[] = [];
+  let results: WikiResultDoc[] = [];
   const hasFilter = Boolean(q?.trim()) || Boolean(chapter);
 
   if (hasFilter) {
-    let query = supabase.from("wiki_pages").select("id, title, section, definition, flagged").order("section", { ascending: true });
+    let query = supabase
+      .from("wiki_pages")
+      .select("id, title, section, definition, points, flagged")
+      .order("section", { ascending: true });
     if (q?.trim()) {
       query = query.ilike("search_text", `%${q.trim()}%`);
     }
@@ -50,7 +58,10 @@ export default async function WikiListPage({
       query = query.ilike("section", `${chapter}장%`);
     }
     const { data } = await query.limit(300);
-    results = data ?? [];
+    results = (data ?? []).map((row) => ({
+      ...row,
+      points: Array.isArray(row.points) ? (row.points as string[]) : [],
+    }));
   }
 
   const activeChapterLabel = CHAPTERS.find((c) => c.num === chapter)?.label;
@@ -204,51 +215,12 @@ export default async function WikiListPage({
           )}
 
           {results.map((doc) => (
-            <Link
-              key={doc.id}
-              href={`/wiki/${doc.id}`}
-              style={{
-                display: "block",
-                padding: "16px 20px",
-                borderRadius: 14,
-                border: `1px solid ${COLORS.border}`,
-                textDecoration: "none",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.text }}>
-                  {doc.flagged && <span style={{ color: COLORS.orange }}>⚠ </span>}
-                  {doc.title}
-                </span>
-                <span
-                  style={{
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    color: COLORS.textFaint,
-                    background: COLORS.chipBg,
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {doc.section}
-                </span>
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: COLORS.textFaint,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {doc.definition}
-              </div>
-            </Link>
+            <WikiResultCard key={doc.id} doc={doc} />
           ))}
         </div>
       </section>
+
+      <AgentChatWidget loggedIn={Boolean(user)} />
     </div>
   );
 }

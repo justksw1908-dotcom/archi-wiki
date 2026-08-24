@@ -1,10 +1,13 @@
 // Phase 4/8: Gemini로 텍스트 청크에서 위키 개념을 뽑아내는 부분.
 // 반드시 서버에서만 호출한다.
 // Phase 8: Gemini 무료 할당량을 다 썼을 때, 사용 가능하면 로컬 Ollama로 대신 생성한다(generateWikiConceptsAuto).
+// Phase 10 후속(AI 에이전트 라운드): Ollama보다 먼저 Groq를 시도한다 — Groq는 배포 환경에서도
+// 되는 클라우드 API라서(Ollama는 로컬 전용) 실질적으로 더 자주 성공한다.
 import { GoogleGenAI } from "@google/genai";
 import { sanitizeExtractedText } from "./text-extract";
 import { isQuotaExceededMessage } from "./ai-quota";
 import { isOllamaAvailable, ollamaGenerateJson } from "./ollama";
+import { isGroqConfigured, groqGenerateJson } from "./groq";
 
 export type ConceptAction = "new" | "extend" | "edit";
 
@@ -155,11 +158,12 @@ export async function generateWikiConcepts(
   throw new GeminiGenerationError("도달할 수 없는 코드 경로");
 }
 
-export type GenerationSource = "gemini" | "ollama";
+export type GenerationSource = "gemini" | "groq" | "ollama";
 
-// Phase 8: generateWikiConcepts를 먼저 시도하고, 딱 "할당량 초과"일 때만 로컬 Ollama로 대신
-// 만들어본다. quiz-gemini.ts의 generateQuizItemsAuto와 같은 패턴 — Ollama가 지금 이 서버에서
-// 안 닿으면(배포된 서버·폰 등) 원래의 할당량 초과 오류를 그대로 던진다.
+// Phase 8: generateWikiConcepts를 먼저 시도하고, 딱 "할당량 초과"일 때만 대신 만들어본다.
+// Phase 10 후속: 순서는 Groq(클라우드, 배포 환경에서도 됨) → Ollama(로컬 전용, 마지막 수단).
+// quiz-gemini.ts의 generateQuizItemsAuto와 같은 패턴 — 어느 쪽도 안 되면 원래의 할당량 초과
+// 오류를 그대로 던진다.
 export async function generateWikiConceptsAuto(
   chunkText: string,
   existingTitles: string[]
@@ -170,11 +174,26 @@ export async function generateWikiConceptsAuto(
   } catch (e) {
     if (!(e instanceof GeminiQuotaExceededError)) throw e;
 
+    const prompt = buildPrompt(chunkText, existingTitles);
+
+    if (isGroqConfigured()) {
+      try {
+        const rawText = await groqGenerateJson(prompt, RESPONSE_JSON_SCHEMA);
+        const parsed = JSON.parse(rawText);
+        const concepts = parsed?.concepts;
+        if (!Array.isArray(concepts)) throw new Error("concepts 배열이 없습니다.");
+        const invalidIndex = concepts.findIndex((c) => !isValidConcept(c));
+        if (invalidIndex !== -1) throw new Error(`concepts[${invalidIndex}]가 스키마에 맞지 않습니다.`);
+        return { concepts: concepts.map((c) => sanitizeConcept(c as GeminiConcept)), source: "groq" };
+      } catch {
+        // Groq도 실패하면(할당량 초과·설정 오류 등) 조용히 Ollama로 넘어간다.
+      }
+    }
+
     const available = await isOllamaAvailable();
     if (!available) throw e;
 
     try {
-      const prompt = buildPrompt(chunkText, existingTitles);
       const rawText = await ollamaGenerateJson(prompt, RESPONSE_JSON_SCHEMA);
       const parsed = JSON.parse(rawText);
       const concepts = parsed?.concepts;
@@ -184,7 +203,7 @@ export async function generateWikiConceptsAuto(
       return { concepts: concepts.map((c) => sanitizeConcept(c as GeminiConcept)), source: "ollama" };
     } catch (ollamaError) {
       const message = ollamaError instanceof Error ? ollamaError.message : String(ollamaError);
-      throw new GeminiGenerationError(`Gemini 할당량 초과 + 로컬 Ollama도 실패: ${message}`);
+      throw new GeminiGenerationError(`Gemini 할당량 초과 + Groq/로컬 Ollama도 실패: ${message}`);
     }
   }
 }

@@ -1,10 +1,13 @@
 // Phase 6/8: Gemini로 위키 문서 하나당 퀴즈 여러 개를 한 번만 생성해서 캐싱하는 부분.
 // 채점은 절대 AI를 다시 부르지 않는다 — 객관식/OX/빈칸/서술형 전부 코드로 정답·허용 표현을 비교한다.
 // Phase 8: Gemini 무료 할당량을 다 썼을 때, 사용 가능하면 로컬 Ollama로 대신 생성한다(generateQuizItemsAuto).
+// Phase 10 후속(AI 에이전트 라운드): Ollama보다 먼저 Groq를 시도한다 — Groq는 배포 환경에서도
+// 되는 클라우드 API라서(Ollama는 로컬 전용) 실질적으로 더 자주 성공한다.
 import { GoogleGenAI } from "@google/genai";
 import { sanitizeExtractedText } from "./text-extract";
 import { isQuotaExceededMessage } from "./ai-quota";
 import { isOllamaAvailable, ollamaGenerateJson } from "./ollama";
+import { isGroqConfigured, groqGenerateJson } from "./groq";
 
 export type QuizType = "multiple_choice" | "fill_blank" | "true_false" | "short_answer";
 
@@ -157,12 +160,13 @@ export async function generateQuizItems(
   throw new QuizGenerationError("도달할 수 없는 코드 경로");
 }
 
-export type GenerationSource = "gemini" | "ollama";
+export type GenerationSource = "gemini" | "groq" | "ollama";
 
-// Phase 8: generateQuizItems를 먼저 시도하고, 딱 "할당량 초과"일 때만 로컬 Ollama로 대신
-// 만들어본다. Ollama가 지금 이 서버에서 안 닿으면(배포된 서버·폰 등) 원래의 할당량 초과
-// 오류를 그대로 던진다 — 호출하는 쪽(라우트)은 지금까지 하던 대로 QuizQuotaExceededError만
-// 확인하면 되고, 폴백 성공 시에만 source가 "ollama"로 바뀐다.
+// Phase 8: generateQuizItems를 먼저 시도하고, 딱 "할당량 초과"일 때만 대신 만들어본다.
+// Phase 10 후속: 순서는 Groq(클라우드, 배포 환경에서도 됨) → Ollama(로컬 전용, 마지막 수단).
+// 어느 쪽도 안 되면(지금 이 서버에서 안 닿으면) 원래의 할당량 초과 오류를 그대로 던진다 —
+// 호출하는 쪽(라우트)은 지금까지 하던 대로 QuizQuotaExceededError만 확인하면 되고, 폴백
+// 성공 시에만 source가 "groq"/"ollama"로 바뀐다.
 export async function generateQuizItemsAuto(
   pageTitle: string,
   section: string,
@@ -175,11 +179,26 @@ export async function generateQuizItemsAuto(
   } catch (e) {
     if (!(e instanceof QuizQuotaExceededError)) throw e;
 
+    const prompt = buildPrompt(pageTitle, section, definition, points);
+
+    if (isGroqConfigured()) {
+      try {
+        const rawText = await groqGenerateJson(prompt, RESPONSE_JSON_SCHEMA);
+        const parsed = JSON.parse(rawText);
+        const items = parsed?.items;
+        if (!Array.isArray(items) || items.length === 0) throw new Error("items 배열이 비어있습니다.");
+        const invalidIndex = items.findIndex((it) => !isValidItem(it));
+        if (invalidIndex !== -1) throw new Error(`items[${invalidIndex}]가 스키마에 맞지 않습니다.`);
+        return { items: items.map((it) => sanitizeItem(it as GeminiQuizItem)), source: "groq" };
+      } catch {
+        // Groq도 실패하면(할당량 초과·설정 오류 등) 조용히 Ollama로 넘어간다.
+      }
+    }
+
     const available = await isOllamaAvailable();
     if (!available) throw e;
 
     try {
-      const prompt = buildPrompt(pageTitle, section, definition, points);
       const rawText = await ollamaGenerateJson(prompt, RESPONSE_JSON_SCHEMA);
       const parsed = JSON.parse(rawText);
       const items = parsed?.items;
@@ -189,7 +208,7 @@ export async function generateQuizItemsAuto(
       return { items: items.map((it) => sanitizeItem(it as GeminiQuizItem)), source: "ollama" };
     } catch (ollamaError) {
       const message = ollamaError instanceof Error ? ollamaError.message : String(ollamaError);
-      throw new QuizGenerationError(`Gemini 할당량 초과 + 로컬 Ollama도 실패: ${message}`);
+      throw new QuizGenerationError(`Gemini 할당량 초과 + Groq/로컬 Ollama도 실패: ${message}`);
     }
   }
 }

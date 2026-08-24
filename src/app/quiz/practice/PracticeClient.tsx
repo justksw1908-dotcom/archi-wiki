@@ -19,7 +19,7 @@ type QuizItem = {
 
 type Result = { isCorrect: boolean; correctAnswer: Record<string, unknown>; nextReviewInDays: number | null };
 
-export default function PracticeClient({ chapter }: { chapter: string | null }) {
+export default function PracticeClient({ chapter, section }: { chapter: string | null; section: string | null }) {
   const [items, setItems] = useState<QuizItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -33,12 +33,13 @@ export default function PracticeClient({ chapter }: { chapter: string | null }) 
   useEffect(() => {
     // 페이지에 들어오자마자 문제 묶음을 한 번 불러온다 — 마운트 시 1회성 조회라 의도적.
     load();
-  }, [chapter]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chapter, section]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     try {
       const qs = new URLSearchParams({ count: "10" });
       if (chapter) qs.set("chapter", chapter);
+      if (chapter && section) qs.set("section", section);
       const res = await fetch(`/api/quiz/practice?${qs.toString()}`);
       const data = await res.json();
       if (!data.ok) {
@@ -115,7 +116,7 @@ export default function PracticeClient({ chapter }: { chapter: string | null }) 
       </Link>
 
       <h1 style={{ fontSize: 21, fontWeight: 800, letterSpacing: -0.3, margin: "14px 0 20px", color: COLORS.text }}>
-        {chapter ? `${chapter}장 퀴즈` : "전체 퀴즈"}
+        {chapter ? `${chapter}장${section ? ` ${section}절` : ""} 퀴즈` : "전체 퀴즈"}
       </h1>
 
       {error && (

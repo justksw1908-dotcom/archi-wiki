@@ -9,16 +9,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import { parseSection } from "@/lib/parse-section";
 
 type Item = { id: string; title: string; section: string; has_quiz: boolean };
 type ParsedItem = Item & { chapter: string; sectionNum: string; label: string };
-
-function parseSection(section: string): { chapter: string; sectionNum: string; label: string } {
-  const m = section.match(/^(\d+)장\s*·\s*(\d+)절\s*·\s*(.*)$/);
-  if (m) return { chapter: m[1], sectionNum: m[2], label: m[3].trim() };
-  const chapterOnly = section.match(/^(\d+)장/);
-  return { chapter: chapterOnly ? chapterOnly[1] : "기타", sectionNum: "0", label: section };
-}
 
 function TriCheckbox({
   checked,
@@ -143,6 +137,7 @@ export default function QuizSelectPage() {
     setProgress({ status: "running", total: queue.length, processed: 0, created: 0 });
     let processed = 0;
     let created = 0;
+    let createdViaGroq = 0;
     let createdViaOllama = 0;
     let quotaHit = false;
     const errorMessages: string[] = [];
@@ -160,6 +155,7 @@ export default function QuizSelectPage() {
           errorMessages.push(data.message ?? "생성 실패");
         } else {
           created += data.created ?? 0;
+          createdViaGroq += data.created_via_groq ?? 0;
           createdViaOllama += data.created_via_ollama ?? 0;
           if (data.errors?.length) errorMessages.push(...data.errors);
           if (data.quota_exceeded) quotaHit = true;
@@ -169,19 +165,25 @@ export default function QuizSelectPage() {
       }
       processed += batch.length;
 
-      const ollamaNote = createdViaOllama > 0 ? ` (그중 로컬 Ollama로 만든 것 ${createdViaOllama}개 포함)` : "";
+      const fallbackNote =
+        [
+          createdViaGroq > 0 ? `Groq로 만든 것 ${createdViaGroq}개` : null,
+          createdViaOllama > 0 ? `로컬 Ollama로 만든 것 ${createdViaOllama}개` : null,
+        ]
+          .filter(Boolean)
+          .join(", ") || "";
 
       if (quotaHit) {
-        // Gemini 할당량을 넘고 로컬 Ollama도 못 쓸 때만 여기로 온다(쓸 수 있으면 자동으로 대신
-        // 생성돼서 quota_exceeded 자체가 안 켜짐). 남은 문서들은 API를 다시 부르지 않고 여기서
-        // 바로 멈춘다. 아직 처리 못 한 나머지(이번 배치의 스킵분 + 큐에 남은 것)는 선택을 풀지
+        // Gemini 할당량을 넘고 Groq·로컬 Ollama도 못 쓸 때만 여기로 온다(둘 중 하나라도 쓸 수 있으면
+        // 자동으로 대신 생성돼서 quota_exceeded 자체가 안 켜짐). 남은 문서들은 API를 다시 부르지 않고
+        // 여기서 바로 멈춘다. 아직 처리 못 한 나머지(이번 배치의 스킵분 + 큐에 남은 것)는 선택을 풀지
         // 않고 그대로 둬서, 내일 할당량이 초기화된 뒤 다시 누르기만 하면 이어서 만들 수 있게 한다.
         setProgress({
           status: "quota",
           total: processed + queue.length,
           processed,
           created,
-          message: `오늘의 무료 API 할당량(모델당 하루 20회)을 다 썼어요.${ollamaNote} ${QUOTA_RESET_HINT} 선택은 그대로 남겨뒀으니 내일 "생성" 버튼만 다시 누르면 이어서 만들어요. (컴퓨터에 Ollama를 설치해두면 할당량이 다 떨어져도 로컬 모델로 자동으로 이어서 만들어요 — README의 Phase 8 참고.)`,
+          message: `오늘의 무료 API 할당량(모델당 하루 20회)을 다 썼어요.${fallbackNote ? ` (그중 ${fallbackNote} 포함)` : ""} ${QUOTA_RESET_HINT} 선택은 그대로 남겨뒀으니 내일 "생성" 버튼만 다시 누르면 이어서 만들어요. (.env.local에 GROQ_API_KEY를 설정하거나 컴퓨터에 Ollama를 설치해두면 할당량이 다 떨어져도 자동으로 이어서 만들어요 — README 참고.)`,
         });
         return;
       }
@@ -191,7 +193,7 @@ export default function QuizSelectPage() {
         total: processed + queue.length,
         processed,
         created,
-        message: [errorMessages.length ? errorMessages.join(" / ") : null, createdViaOllama > 0 ? `로컬 Ollama로 만든 것 ${createdViaOllama}개 포함` : null]
+        message: [errorMessages.length ? errorMessages.join(" / ") : null, fallbackNote ? `${fallbackNote} 포함` : null]
           .filter(Boolean)
           .join(" · ") || undefined,
       });

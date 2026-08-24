@@ -16,12 +16,15 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const chapter = searchParams.get("chapter");
+  // 절(節) 선택은 장이 같이 있을 때만 의미가 있다 — 장 없이 절만 오면 무시한다.
+  const section = chapter ? searchParams.get("section") : null;
   const countParam = Number(searchParams.get("count"));
   const count = Number.isFinite(countParam) && countParam > 0 ? Math.min(countParam, MAX_COUNT) : DEFAULT_COUNT;
 
   const { data, error } = await supabase.rpc("get_random_quiz_items", {
     p_count: count,
     p_chapter: chapter || null,
+    p_section: section || null,
   });
 
   if (error) {

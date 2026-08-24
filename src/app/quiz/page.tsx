@@ -8,54 +8,39 @@
 // quiz_items/quiz_attempts는 anon에게 select 권한을 안 줬으므로 애초에 조회도 안 된다),
 // 비로그인일 땐 아예 그 부분을 건너뛰고 "퀴즈 풀기"만 보여준다.
 //
-// 디자인 라운드: 붉은/주황 톤 + 카드형 구성으로 다시 그리면서, 예전에 따로 쓰던 파란색·보라색
-// 강조색은 전부 브랜드 컬러(red/orange)로 통일했다. 정답/오답 같은 의미색은 그대로 남겨둔다.
+// 디자인 라운드: 붉은/주황 톤 + 카드형 구성으로 다시 그리면서, 예전에 따로 쓰던 파란색·초록색·보라색
+// 강조색은 전부 브랜드 컬러(red/orange)로 통일했다. 정답/오답 같은 의미가 있는 색만 별도로 남겨뒀다.
+//
+// 퀴즈 절 선택 라운드: "장뿐 아니라 절 단위로도 골라서 풀 수 있게" 해달라는 요청으로, 장 목록만
+// 있던 PracticeLinks를 장/절 아코디언(QuizLinks)으로 바꿨다. 절 목록은 wiki_pages의 section
+// 문자열(공개 데이터)에서 뽑는다 — 퀴즈 존재 여부(quiz_items)는 비로그인에겐 안 보이는 데이터라서
+// 쓰지 않았고, 예전처럼 "이 범위엔 아직 퀴즈가 없어요" 빈 상태로 자연스럽게 안내한다.
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase-paginate";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import { CHAPTER_LABELS } from "@/lib/chapters";
+import { parseSection } from "@/lib/parse-section";
+import QuizLinks, { type ChapterNode } from "./QuizLinks";
 
-const CHAPTERS = ["0", "1", "2", "3", "4", "5", "6"];
-
-function PracticeLinks() {
-  return (
-    <>
-      <h2 style={{ fontSize: 15.5, fontWeight: 700, color: COLORS.text, marginBottom: 10 }}>퀴즈 풀기</h2>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
-        <Link
-          href="/quiz/practice"
-          style={{
-            padding: "8px 16px",
-            fontSize: 13.5,
-            fontWeight: 700,
-            borderRadius: 999,
-            background: COLORS.red,
-            color: "#fff",
-            textDecoration: "none",
-          }}
-        >
-          전체에서 풀기
-        </Link>
-        {CHAPTERS.map((ch) => (
-          <Link
-            key={ch}
-            href={`/quiz/practice?chapter=${ch}`}
-            style={{
-              padding: "8px 16px",
-              fontSize: 13.5,
-              borderRadius: 999,
-              border: `1px solid ${COLORS.border}`,
-              color: COLORS.textMuted,
-              textDecoration: "none",
-            }}
-          >
-            {ch}장
-          </Link>
-        ))}
-      </div>
-      <p style={{ fontSize: 12.5, color: COLORS.textFainter, margin: 0 }}>한 번에 최대 10문제씩 무작위로 나와요.</p>
-    </>
-  );
+async function buildChapterSectionTree(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<ChapterNode[]> {
+  const { data: sectionRows } = await fetchAllRows<{ section: string }>(supabase, "wiki_pages", "section");
+  const chapterMap = new Map<string, Map<string, number>>();
+  for (const row of sectionRows ?? []) {
+    const { chapter, sectionNum } = parseSection(row.section);
+    if (!chapterMap.has(chapter)) chapterMap.set(chapter, new Map());
+    const secMap = chapterMap.get(chapter)!;
+    secMap.set(sectionNum, (secMap.get(sectionNum) ?? 0) + 1);
+  }
+  return CHAPTER_LABELS.map(({ num, label }) => ({
+    chapter: num,
+    label,
+    sections: [...(chapterMap.get(num)?.entries() ?? [])]
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([sectionNum, count]) => ({ sectionNum, count })),
+  }));
 }
 
 export default async function QuizHubPage() {
@@ -64,6 +49,9 @@ export default async function QuizHubPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // 로그인 여부와 상관없이 필요해서(장/절 트리는 위키 문서 자체가 출처라 공개 데이터) 분기 앞에서 조회.
+  const tree = await buildChapterSectionTree(supabase);
 
   if (!user) {
     return (
@@ -77,7 +65,13 @@ export default async function QuizHubPage() {
           </Link>
           하세요.
         </p>
-        <PracticeLinks />
+        <QuizLinks
+          tree={tree}
+          basePath="/quiz/practice"
+          title="퀴즈 풀기"
+          allLabel="전체에서 풀기"
+          hint="한 번에 최대 10문제씩 무작위로 나와요."
+        />
       </div>
     );
   }
@@ -91,7 +85,7 @@ export default async function QuizHubPage() {
   const { count: totalQuizItems } = await supabase.from("quiz_items").select("id", { count: "exact", head: true });
   const { count: totalAttempts } = await supabase.from("quiz_attempts").select("id", { count: "exact", head: true });
   // 카운트만 필요해서 DB 함수(count_due_review_items)로 가볍게 물어본다 — 문제 본문까지 다 안 가져옴.
-  const { data: dueCount } = await supabase.rpc("count_due_review_items", { p_chapter: null });
+  const { data: dueCount } = await supabase.rpc("count_due_review_items", { p_chapter: null, p_section: null });
   const hasDue = (dueCount ?? 0) > 0;
 
   return (
@@ -159,7 +153,23 @@ export default async function QuizHubPage() {
         </Link>
       </div>
 
-      <PracticeLinks />
+      <div style={{ marginBottom: 32 }}>
+        <QuizLinks
+          tree={tree}
+          basePath="/quiz/review"
+          title="장 · 절 골라서 복습"
+          allLabel="오늘 복습 전체"
+          hint="선택한 범위 안에서 오늘 복습 일정인 문제만 나와요."
+        />
+      </div>
+
+      <QuizLinks
+        tree={tree}
+        basePath="/quiz/practice"
+        title="퀴즈 풀기"
+        allLabel="전체에서 풀기"
+        hint="한 번에 최대 10문제씩 무작위로 나와요."
+      />
     </div>
   );
 }
