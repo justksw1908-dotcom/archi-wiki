@@ -12,12 +12,21 @@
 // AI 에이전트 라운드: 이 목록 페이지에도 위젯을 띄운다(특정 문서 context 없이 일반 대화 모드).
 // 로그인 여부에 따라 위젯 내용이 달라져서 user를 새로 조회한다(기존에는 이 페이지가 로그인 여부를
 // 신경 쓰지 않았다 — 열람 자체는 비로그인도 가능하므로 이 조회를 추가해도 접근 제한은 그대로다).
+//
+// 위키 미리보기 확장 라운드(2차, 수정): 카드를 펼칠 때마다 GET /api/wiki/pages/[id]로 그때그때
+// 관련 문서·역링크를 불러왔더니 0.5~1초씩 눈에 띄게 느려졌다(매번 새 네트워크 왕복). 그래서
+// 화면에 뜬 결과(최대 300개) 전체에 대해 wiki_links를 딱 2번(나가는 링크·들어오는 링크 각각)만
+// 일괄 조회하고, 거기 걸린 문서들의 정보를 wiki_pages에서 한 번 더 일괄 조회해서, 결과 하나하나에
+// 이미 계산된 관련 문서·역링크를 붙여서 내려준다 — 정의·포인트처럼 목록 조회 시점에 다 갖고 있어서
+// 카드를 펼칠 때 추가 요청이 전혀 없다(즉시 반응). 문서 1104개를 매번 다 훑던 장별 개수 집계보다도
+// 가벼운 조회다(최대 300개로 범위가 좁혀진 상태에서만 도는 쿼리라서).
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase-paginate";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
 import { CHAPTER_LABELS as CHAPTERS } from "@/lib/chapters";
 import WikiResultCard, { type WikiResultDoc } from "./WikiResultCard";
+import { type RelatedDoc } from "./[id]/RelatedDocsPanel";
 import AgentChatWidget from "../AgentChatWidget";
 
 export default async function WikiListPage({
@@ -62,6 +71,52 @@ export default async function WikiListPage({
       ...row,
       points: Array.isArray(row.points) ? (row.points as string[]) : [],
     }));
+  }
+
+  // 결과에 뜬 문서들의 관련 문서·역링크를 한꺼번에 조회한다(카드마다 따로 부르지 않는다 — 위 설명 참고).
+  const outgoingByDocId = new Map<string, RelatedDoc[]>();
+  const backlinksByDocId = new Map<string, RelatedDoc[]>();
+
+  if (results.length > 0) {
+    const resultIds = results.map((r) => r.id);
+
+    type LinkEdge = { from_page_id: string; to_page_id: string };
+    const [{ data: outgoingEdges }, { data: backlinkEdges }] = await Promise.all([
+      supabase.from("wiki_links").select("from_page_id, to_page_id").in("from_page_id", resultIds),
+      supabase.from("wiki_links").select("from_page_id, to_page_id").in("to_page_id", resultIds),
+    ]);
+
+    const edgesOut = (outgoingEdges ?? []) as LinkEdge[];
+    const edgesIn = (backlinkEdges ?? []) as LinkEdge[];
+
+    const neededIds = new Set<string>();
+    edgesOut.forEach((e) => neededIds.add(e.to_page_id));
+    edgesIn.forEach((e) => neededIds.add(e.from_page_id));
+
+    if (neededIds.size > 0) {
+      const { data: linkedDocsRaw } = await supabase
+        .from("wiki_pages")
+        .select("id, title, section, definition, points, flagged")
+        .in("id", [...neededIds]);
+
+      const docsById = new Map<string, RelatedDoc>();
+      for (const d of linkedDocsRaw ?? []) {
+        docsById.set(d.id, { ...d, points: Array.isArray(d.points) ? (d.points as string[]) : [] });
+      }
+
+      for (const e of edgesOut) {
+        const target = docsById.get(e.to_page_id);
+        if (!target) continue;
+        if (!outgoingByDocId.has(e.from_page_id)) outgoingByDocId.set(e.from_page_id, []);
+        outgoingByDocId.get(e.from_page_id)!.push(target);
+      }
+      for (const e of edgesIn) {
+        const source = docsById.get(e.from_page_id);
+        if (!source) continue;
+        if (!backlinksByDocId.has(e.to_page_id)) backlinksByDocId.set(e.to_page_id, []);
+        backlinksByDocId.get(e.to_page_id)!.push(source);
+      }
+    }
   }
 
   const activeChapterLabel = CHAPTERS.find((c) => c.num === chapter)?.label;
@@ -215,7 +270,12 @@ export default async function WikiListPage({
           )}
 
           {results.map((doc) => (
-            <WikiResultCard key={doc.id} doc={doc} />
+            <WikiResultCard
+              key={doc.id}
+              doc={doc}
+              outgoing={outgoingByDocId.get(doc.id) ?? []}
+              backlinks={backlinksByDocId.get(doc.id) ?? []}
+            />
           ))}
         </div>
       </section>

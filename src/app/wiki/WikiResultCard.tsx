@@ -7,11 +7,12 @@
 // 보여주므로 펼칠 때 추가 네트워크 요청은 없다.
 //
 // 위키 미리보기 확장 라운드(2차): "자세히 보기(상세 페이지)에서 같이 나오는 관련 문서·역링크
-// 알약도 이 펼침 안에 같이 나왔으면 좋겠다"는 요청으로, 펼칠 때 그 문서의 관련 문서·역링크를
-// GET /api/wiki/pages/[id]로 지연 조회해서 같이 보여준다(목록에 있는 문서 전부를 미리 조회하면
-// 낭비라서, 실제로 펼친 카드에 대해서만 그때 한 번 불러온다 — 이미 불러온 뒤엔 다시 접었다 펴도
-// 재조회하지 않는다). 알약 UI는 상세 페이지와 똑같이 RelatedDocsPanel을 그대로 재사용해서, 알약을
-// 눌러도 바로 이동하지 않고 그 자리에 미리보기가 펼쳐지는 동작까지 동일하게 유지된다.
+// 알약도 이 펼침 안에 같이 나왔으면 좋겠다"는 요청으로 관련 문서·역링크 알약도 같이 보여준다.
+// 처음엔 펼칠 때 GET /api/wiki/pages/[id]로 그때그때 불러왔는데, 실제로 써보니 펼칠 때마다
+// 0.5~1초 정도 눈에 띄게 느려졌다 — 매번 클라이언트→서버→Supabase 왕복이 새로 생기는 거라서.
+// 그래서 부모(wiki/page.tsx)가 화면에 뜬 결과 전체(최대 300개)에 대해 링크를 한 번에 일괄
+// 조회해서 이미 계산된 outgoing/backlinks를 props로 내려주는 방식으로 바꿨다 — 정의·포인트와
+// 똑같이 목록 조회 시점에 이미 다 갖고 있어서, 펼칠 때 추가 요청이 전혀 없다(즉시 반응).
 import Link from "next/link";
 import { useState } from "react";
 import { COLORS } from "@/lib/theme";
@@ -26,35 +27,21 @@ export type WikiResultDoc = {
   flagged: boolean;
 };
 
-type LinksState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "loaded"; outgoing: RelatedDoc[]; backlinks: RelatedDoc[] };
-
-export default function WikiResultCard({ doc }: { doc: WikiResultDoc }) {
+export default function WikiResultCard({
+  doc,
+  outgoing = [],
+  backlinks = [],
+}: {
+  doc: WikiResultDoc;
+  outgoing?: RelatedDoc[];
+  backlinks?: RelatedDoc[];
+}) {
   const [expanded, setExpanded] = useState(false);
-  const [links, setLinks] = useState<LinksState>({ status: "idle" });
-
-  function toggle() {
-    const next = !expanded;
-    setExpanded(next);
-    if (next && links.status === "idle") {
-      setLinks({ status: "loading" });
-      fetch(`/api/wiki/pages/${doc.id}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (!data.ok) throw new Error(data.message ?? "불러오기 실패");
-          setLinks({ status: "loaded", outgoing: data.outgoing ?? [], backlinks: data.backlinks ?? [] });
-        })
-        .catch(() => setLinks({ status: "error" }));
-    }
-  }
 
   return (
     <div style={{ borderRadius: 14, border: `1px solid ${COLORS.border}`, overflow: "hidden" }}>
       <button
-        onClick={toggle}
+        onClick={() => setExpanded((v) => !v)}
         style={{
           display: "block",
           width: "100%",
@@ -110,26 +97,24 @@ export default function WikiResultCard({ doc }: { doc: WikiResultDoc }) {
             </ul>
           )}
 
-          {links.status === "loading" && (
-            <div style={{ fontSize: 12, color: COLORS.textFainter, marginTop: 14 }}>관련 문서 불러오는 중...</div>
-          )}
-          {links.status === "error" && (
-            <div style={{ fontSize: 12, color: COLORS.textFainter, marginTop: 14 }}>관련 문서를 불러오지 못했어요.</div>
-          )}
-          {links.status === "loaded" && (
+          {(outgoing.length > 0 || backlinks.length > 0) && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
-              <div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: COLORS.textFaint, marginBottom: 8 }}>
-                  관련 문서 ({links.outgoing.length})
+              {outgoing.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: COLORS.textFaint, marginBottom: 8 }}>
+                    관련 문서 ({outgoing.length})
+                  </div>
+                  <RelatedDocsPanel docs={outgoing} />
                 </div>
-                <RelatedDocsPanel docs={links.outgoing} />
-              </div>
-              <div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: COLORS.textFaint, marginBottom: 8 }}>
-                  이 문서를 참조하는 문서 ({links.backlinks.length})
+              )}
+              {backlinks.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: COLORS.textFaint, marginBottom: 8 }}>
+                    이 문서를 참조하는 문서 ({backlinks.length})
+                  </div>
+                  <RelatedDocsPanel docs={backlinks} />
                 </div>
-                <RelatedDocsPanel docs={links.backlinks} />
-              </div>
+              )}
             </div>
           )}
 
