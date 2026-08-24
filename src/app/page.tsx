@@ -11,12 +11,12 @@ export default async function Home() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-black font-sans">
       <main className="max-w-md w-full px-6 py-10 text-center">
         <h1 className="text-2xl font-semibold mb-2">건축공학 학습 위키</h1>
-        <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">Phase 1~5 — 위키 열람 · AI 생성 · 업로드</p>
+        <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-6">위키 열람 · AI 생성 · 업로드 · 퀴즈</p>
 
         {user ? (
           <div className="text-sm space-y-2">
             <p>
-              로그인됨: <strong>{user.email}</strong>
+              로그인됨: <strong>{user.email?.split("@")[0] ?? user.email}</strong>
             </p>
             <p className="text-zinc-500">
               <Link href="/wiki" className="underline font-medium">
@@ -50,12 +50,21 @@ export default async function Home() {
             </p>
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">
-            <Link href="/login" className="underline">
-              로그인
-            </Link>
-            이 필요합니다.
-          </p>
+          <div className="text-sm text-zinc-500 space-y-2">
+            <p>
+              <Link href="/wiki" className="underline font-medium">
+                /wiki
+              </Link>
+              에서 로그인 없이 바로 위키를 둘러볼 수 있어요.
+            </p>
+            <p>
+              편집하거나 새 문서·퀴즈를 만들려면{" "}
+              <Link href="/login" className="underline">
+                로그인
+              </Link>
+              이 필요해요.
+            </p>
+          </div>
         )}
       </main>
     </div>

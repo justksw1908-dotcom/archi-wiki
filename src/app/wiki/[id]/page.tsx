@@ -1,5 +1,10 @@
 // Phase 5: 위키 열람 UI — 문서 상세. 관련 문서(나가는 링크)와 역링크(들어오는 링크)를 같이 보여주고,
 // AI가 잘못 정리한 내용을 고칠 수 있는 최소한의 수동 편집 기능을 제공한다.
+//
+// Phase 10 (로드맵 이후 추가 요청): 이 페이지 자체는 로그인 없이도 열람 가능(src/lib/supabase/middleware.ts,
+// wiki_pages/wiki_links의 public select RLS 정책 참고). 편집 폼은 로그인했을 때만 보여준다 —
+// 어차피 저장 API(PATCH /api/wiki/pages/[id])가 서버에서 다시 로그인을 확인해서 막지만,
+// 비로그인 사용자에게 눌러도 실패할 편집 버튼을 애초에 안 보여주는 게 자연스럽다.
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +15,10 @@ type LinkedDoc = { id: string; title: string; section: string };
 export default async function WikiDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: doc } = await supabase
     .from("wiki_pages")
@@ -83,17 +92,26 @@ export default async function WikiDetailPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      <EditPageForm
-        pageId={doc.id}
-        initial={{
-          section: doc.section,
-          title: doc.title,
-          definition: doc.definition,
-          points,
-          flagged: doc.flagged,
-          links: (outgoingDocs ?? []).map((d) => d.title),
-        }}
-      />
+      {user ? (
+        <EditPageForm
+          pageId={doc.id}
+          initial={{
+            section: doc.section,
+            title: doc.title,
+            definition: doc.definition,
+            points,
+            flagged: doc.flagged,
+            links: (outgoingDocs ?? []).map((d) => d.title),
+          }}
+        />
+      ) : (
+        <p style={{ fontSize: 13, color: "#999" }}>
+          <Link href="/login" style={{ color: "#3A5A9C", textDecoration: "none" }}>
+            로그인
+          </Link>
+          하면 이 문서를 편집할 수 있어요.
+        </p>
+      )}
     </div>
   );
 }
