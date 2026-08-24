@@ -4,9 +4,14 @@
 // (1) 문제 목록을 /api/quiz/review(무작위가 아니라 "오늘 기한 도래" 기준)에서 가져오고,
 // (2) 채점 결과에 "다음 복습은 N일 후"라는 SM-2 피드백을 같이 보여준다.
 // 채점 자체는 연습과 동일하게 /api/quiz/attempts가 코드로만 한다(AI 재호출 없음).
+//
+// AI 에이전트 확장 라운드(퀴즈도 문서 인식형으로): 위젯을 이 컴포넌트 안으로 옮겨서, 지금 복습 중인
+// 문제가 속한 위키 문서(제목·분류·정의·포인트 — /api/quiz/review가 008 마이그레이션 이후 같이
+// 내려준다)를 context로 넘긴다. 문제가 바뀔 때마다(다음 문제로 넘어갈 때) context도 같이 바뀐다.
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import AgentChatWidget from "../../AgentChatWidget";
 
 type QuizItem = {
   id: string;
@@ -15,12 +20,22 @@ type QuizItem = {
   choices?: string[];
   page_title: string;
   page_section: string;
+  page_definition: string;
+  page_points: string[];
   repetitions: number;
 };
 
 type Result = { isCorrect: boolean; correctAnswer: Record<string, unknown>; nextReviewInDays: number };
 
-export default function ReviewClient({ chapter, section }: { chapter: string | null; section: string | null }) {
+export default function ReviewClient({
+  chapter,
+  section,
+  loggedIn,
+}: {
+  chapter: string | null;
+  section: string | null;
+  loggedIn: boolean;
+}) {
   const [items, setItems] = useState<QuizItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -378,6 +393,11 @@ export default function ReviewClient({ chapter, section }: { chapter: string | n
           </div>
         </div>
       )}
+
+      <AgentChatWidget
+        loggedIn={loggedIn}
+        context={current ? { title: current.page_title, section: current.page_section, definition: current.page_definition, points: current.page_points } : null}
+      />
     </div>
   );
 }

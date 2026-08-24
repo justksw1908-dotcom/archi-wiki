@@ -4,9 +4,14 @@
 // 여기는 문제를 보여주고 답을 모아 제출하는 역할만 한다.
 //
 // 디자인 라운드: 시안(Quiz.dc.html)의 진행률 바 + 카드형 문제 + 정답/오답 배너를 옮겼다.
+//
+// AI 에이전트 확장 라운드(퀴즈도 문서 인식형으로): 위젯을 이 컴포넌트 안으로 옮겨서, 지금 풀고 있는
+// 문제가 속한 위키 문서(제목·분류·정의·포인트 — /api/quiz/practice가 008 마이그레이션 이후 같이
+// 내려준다)를 context로 넘긴다. 문제가 바뀔 때마다(다음 문제로 넘어갈 때) context도 같이 바뀐다.
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import AgentChatWidget from "../../AgentChatWidget";
 
 type QuizItem = {
   id: string;
@@ -15,11 +20,21 @@ type QuizItem = {
   choices?: string[];
   page_title: string;
   page_section: string;
+  page_definition: string;
+  page_points: string[];
 };
 
 type Result = { isCorrect: boolean; correctAnswer: Record<string, unknown>; nextReviewInDays: number | null };
 
-export default function PracticeClient({ chapter, section }: { chapter: string | null; section: string | null }) {
+export default function PracticeClient({
+  chapter,
+  section,
+  loggedIn,
+}: {
+  chapter: string | null;
+  section: string | null;
+  loggedIn: boolean;
+}) {
   const [items, setItems] = useState<QuizItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -374,6 +389,11 @@ export default function PracticeClient({ chapter, section }: { chapter: string |
           </div>
         </div>
       )}
+
+      <AgentChatWidget
+        loggedIn={loggedIn}
+        context={current ? { title: current.page_title, section: current.page_section, definition: current.page_definition, points: current.page_points } : null}
+      />
     </div>
   );
 }

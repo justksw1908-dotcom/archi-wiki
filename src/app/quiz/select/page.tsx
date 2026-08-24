@@ -6,10 +6,16 @@
 //
 // 디자인 라운드: 파란색/보라색 강조를 브랜드 컬러(red/orange)로 통일했다. 트리 구조 자체는
 // 기능 그대로 두고 카드·배지 스타일만 다시 그렸다.
+//
+// AI 에이전트 확장 라운드: 이 화면은 middleware가 로그인 없인 아예 못 들어오게 막아서(/quiz/select는
+// PUBLIC_EXACT_PATHS/PUBLIC_PREFIX_PATHS 어디에도 없음) 여기 렌더링됐다는 것 자체가 로그인 상태라는
+// 뜻이다 — 이 컴포넌트가 클라이언트 컴포넌트라 서버에서처럼 auth.getUser()를 직접 부를 수 없어서,
+// 다른 화면들처럼 조회해서 넘기는 대신 loggedIn을 true로 고정한다.
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
 import { parseSection } from "@/lib/parse-section";
+import AgentChatWidget from "../../AgentChatWidget";
 
 type Item = { id: string; title: string; section: string; has_quiz: boolean };
 type ParsedItem = Item & { chapter: string; sectionNum: string; label: string };
@@ -354,6 +360,8 @@ export default function QuizSelectPage() {
           </div>
         )}
       </div>
+
+      <AgentChatWidget loggedIn={true} />
     </div>
   );
 }

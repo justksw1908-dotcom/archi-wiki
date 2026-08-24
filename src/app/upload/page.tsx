@@ -1,7 +1,11 @@
 "use client";
 
+// AI 에이전트 확장 라운드: 이 화면은 middleware가 로그인 없인 아예 못 들어오게 막아두므로(/upload는
+// 공개 경로 목록에 없음) 여기 렌더링됐다는 것 자체가 로그인 상태라는 뜻이다 — 클라이언트 컴포넌트라
+// 서버에서처럼 auth.getUser()를 직접 부를 수 없어서, loggedIn을 true로 고정해 넘긴다.
 import { useCallback, useRef, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import AgentChatWidget from "../AgentChatWidget";
 
 type UploadResult = {
   ok: boolean;
@@ -270,6 +274,8 @@ export default function UploadPage() {
           )}
         </div>
       )}
+
+      <AgentChatWidget loggedIn={true} />
     </div>
   );
 }

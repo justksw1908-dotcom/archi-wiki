@@ -15,6 +15,10 @@
 // 있던 PracticeLinks를 장/절 아코디언(QuizLinks)으로 바꿨다. 절 목록은 wiki_pages의 section
 // 문자열(공개 데이터)에서 뽑는다 — 퀴즈 존재 여부(quiz_items)는 비로그인에겐 안 보이는 데이터라서
 // 쓰지 않았고, 예전처럼 "이 범위엔 아직 퀴즈가 없어요" 빈 상태로 자연스럽게 안내한다.
+//
+// AI 에이전트 확장 라운드: "위키 화면에만 있지 말고 퀴즈·업로드·승인대기에도 배치해달라"는 요청으로,
+// 이 페이지에도 위젯을 띄운다. 특정 위키 문서 맥락은 없어서(퀴즈 허브라 문서 하나로 좁혀지지 않음)
+// context 없이 일반 대화 모드로 연다.
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase-paginate";
@@ -22,6 +26,7 @@ import { COLORS, FONT_FAMILY } from "@/lib/theme";
 import { CHAPTER_LABELS } from "@/lib/chapters";
 import { parseSection } from "@/lib/parse-section";
 import QuizLinks, { type ChapterNode } from "./QuizLinks";
+import AgentChatWidget from "../AgentChatWidget";
 
 async function buildChapterSectionTree(
   supabase: Awaited<ReturnType<typeof createClient>>
@@ -72,6 +77,8 @@ export default async function QuizHubPage() {
           allLabel="전체에서 풀기"
           hint="한 번에 최대 10문제씩 무작위로 나와요."
         />
+
+        <AgentChatWidget loggedIn={false} />
       </div>
     );
   }
@@ -170,6 +177,8 @@ export default async function QuizHubPage() {
         allLabel="전체에서 풀기"
         hint="한 번에 최대 10문제씩 무작위로 나와요."
       />
+
+      <AgentChatWidget loggedIn={Boolean(user)} />
     </div>
   );
 }

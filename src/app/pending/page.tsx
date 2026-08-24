@@ -2,8 +2,13 @@
 
 // Phase 4: AI가 "기존 문서와 겹치지만 추가/수정할 내용이 있다"고 판단한 제안들을
 // 사람이 직접 승인/거절하는 화면. 여기서 승인해야만 실제 wiki_pages가 바뀐다.
+//
+// AI 에이전트 확장 라운드: 이 화면도 middleware가 로그인 없인 아예 못 들어오게 막아두므로(/pending은
+// 공개 경로 목록에 없음) 여기 렌더링됐다는 것 자체가 로그인 상태라는 뜻이다 — 클라이언트 컴포넌트라
+// 서버에서처럼 auth.getUser()를 직접 부를 수 없어서, loggedIn을 true로 고정해 넘긴다.
 import { useCallback, useEffect, useState } from "react";
 import { COLORS, FONT_FAMILY } from "@/lib/theme";
+import AgentChatWidget from "../AgentChatWidget";
 
 type PendingItem = {
   id: string;
@@ -205,6 +210,8 @@ export default function PendingPage() {
           </div>
         ))}
       </div>
+
+      <AgentChatWidget loggedIn={true} />
     </div>
   );
 }
